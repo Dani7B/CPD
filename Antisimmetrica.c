@@ -3,7 +3,7 @@
 
 #define INDEX(i,j,rowlen) ((i)*(rowlen)+j)
 
-int main2(int argc, char* argv[]) {
+int main(int argc, char* argv[]) {
 	float **A;
 	float *x;
 	float n, temp, res, test;
