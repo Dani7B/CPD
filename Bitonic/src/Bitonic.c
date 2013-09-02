@@ -17,8 +17,7 @@ int writeFile(){
 	return 0;
 }
 
-int floatcomp(const void* a, const void* b)
-{
+int floatcomp(const void* a, const void* b){
     if(*(const float*)a < *(const float*)b)
         return -1;
     return *(const float*)a > *(const float*)b;
