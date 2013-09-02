@@ -1,12 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <math.h>
 #include <mpi.h>
 
 int writeFile(){
 	FILE *f;
 	int n = 16;
-	float w[16]={1.0, 7.0, 3.0, 8.0, 5.0, 9.0, 2.0, 10.0, 13.0, 4.0, 14.0, 12.0, 6.0, 11.0, 15.0, 16.0};
+	float w[16]={1.0, 13.0, 7.0, 4.0, 11.0, 5.0, 15.0, 2.0, 14.0, 10.0, 12.0, 8.0, 16.0, 3.0, 9.0, 6.0};
 
 	f = fopen("prova.bin", "wb");
 	if(f!=NULL) {
@@ -73,9 +73,49 @@ orderedAfterSwap* swapMax(float* mieiElementi, float* ricevuti, int elementiXpro
 	return result;
 }
 
+
+char* intToBinary(int k, int length){
+	int i;
+	char *result;
+	result = malloc(length);
+	for(i=length-1; i>=0; i--){
+		if(k%2==0)
+			result[i] = '0';
+		else
+			result[i] = '1';
+		k/=2;
+	}
+	return result;
+}
+
+int binaryToInt(char* binary, int length){
+	int i, k, result;
+	result = 0;
+	k = length-1;
+	for(i=0; i<length; i++){
+		if(binary[i]=='1')
+			result += pow(2,k);
+		k--;
+	}
+	return result;
+}
+
+void inverseSort(float* elementi, int n) {
+	int i, j;
+	float temp;
+	j=n-1;
+	for(i=0; i<n/2; i++) {
+		temp = elementi[i];
+		elementi[i] = elementi[j];
+		elementi[j] = temp;
+		j--;
+	}
+}
+
 int main(int argc, char* argv[]){
-	int rank, size, n, i, j, elementiXproc, toSort, partialToSort;
+	int rank, size, n, i, j, elementiXproc, stage, length, next, fase, subfase, bitcount, down;
 	orderedAfterSwap *m;
+	char *binary;
 	FILE *file;
 	float *elementi, *mieiElementi, *result;
 
@@ -122,42 +162,76 @@ int main(int argc, char* argv[]){
 	}
 
 	qsort(mieiElementi, elementiXproc, sizeof(float), floatcomp);
-	toSort = 1;
-	while(toSort>0) {
-		partialToSort = 0;
-		if(rank%2==0){
-			if(rank!=size-1){
-				MPI_Send (mieiElementi, elementiXproc, MPI_FLOAT, rank+1, 0, MPI_COMM_WORLD);
-				MPI_Recv (elementi, elementiXproc, MPI_FLOAT, rank+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-				m = swapMin(mieiElementi,elementi,elementiXproc);
-				mieiElementi = m->mieiElementi;
-				partialToSort += m->hadToSwap;
+	length = log(size)/log(2);
+	binary = intToBinary(rank,length);
+
+	/* Bitonic order the input*/
+	for(fase=1; fase<length; fase++) {
+		if(binary[length - fase - 1] == '0')
+			down = 1;
+		else
+			down = 0;
+		subfase = fase;
+		while(subfase > 0) {
+			bitcount = length - subfase;
+			if(binary[bitcount]=='0'){
+				binary[bitcount] = '1';
+				next = binaryToInt(binary, length);
+				binary[bitcount] = '0';
+				if(down){
+					MPI_Send (mieiElementi, elementiXproc, MPI_FLOAT, next, 0, MPI_COMM_WORLD);
+					MPI_Recv (elementi, elementiXproc, MPI_FLOAT, next, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+					m = swapMin(mieiElementi,elementi,elementiXproc);
+					mieiElementi = m->mieiElementi;
+				}
+				else{
+					MPI_Send (mieiElementi, elementiXproc, MPI_FLOAT, next, 0, MPI_COMM_WORLD);
+					MPI_Recv (elementi, elementiXproc, MPI_FLOAT, next, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+					m = swapMax(mieiElementi,elementi,elementiXproc);
+					mieiElementi = m->mieiElementi;
+				}
 			}
-			if(rank!=0){
-				MPI_Recv (elementi, elementiXproc, MPI_FLOAT, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-				MPI_Send (mieiElementi, elementiXproc, MPI_FLOAT, rank-1, 0, MPI_COMM_WORLD);
-				m = swapMax(mieiElementi,elementi,elementiXproc);
-				mieiElementi = m->mieiElementi;
-				partialToSort += m->hadToSwap;
+			else {
+				binary[bitcount] = '0';
+				next = binaryToInt(binary, length);
+				binary[bitcount] = '1';
+				if(down){
+					MPI_Send (mieiElementi, elementiXproc, MPI_FLOAT, next, 0, MPI_COMM_WORLD);
+					MPI_Recv (elementi, elementiXproc, MPI_FLOAT, next, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+					m = swapMax(mieiElementi,elementi,elementiXproc);
+					mieiElementi = m->mieiElementi;
+				}
+				else{
+					MPI_Send (mieiElementi, elementiXproc, MPI_FLOAT, next, 0, MPI_COMM_WORLD);
+					MPI_Recv (elementi, elementiXproc, MPI_FLOAT, next, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+					m = swapMin(mieiElementi,elementi,elementiXproc);
+					mieiElementi = m->mieiElementi;
+				}
 			}
+			subfase--;
+		}
+	}
+
+	/* Bitonic sort */
+	for(stage=0; stage<length; stage++) {
+		if(binary[stage]=='0'){
+			binary[stage] = '1';
+			next = binaryToInt(binary, length);
+			binary[stage] = '0';
+			MPI_Send (mieiElementi, elementiXproc, MPI_FLOAT, next, 0, MPI_COMM_WORLD);
+			MPI_Recv (elementi, elementiXproc, MPI_FLOAT, next, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			m = swapMin(mieiElementi,elementi,elementiXproc);
+			mieiElementi = m->mieiElementi;
 		}
 		else {
-			MPI_Recv (elementi, elementiXproc, MPI_FLOAT, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-			MPI_Send (mieiElementi, elementiXproc, MPI_FLOAT, rank-1, 0, MPI_COMM_WORLD);
+			binary[stage] = '0';
+			next = binaryToInt(binary, length);
+			binary[stage] = '1';
+			MPI_Recv (elementi, elementiXproc, MPI_FLOAT, next, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Send (mieiElementi, elementiXproc, MPI_FLOAT, next, 0, MPI_COMM_WORLD);
 			m = swapMax(mieiElementi,elementi,elementiXproc);
 			mieiElementi = m->mieiElementi;
-			partialToSort += m->hadToSwap;
-			if(rank!=size-1){
-				MPI_Send (mieiElementi, elementiXproc, MPI_FLOAT, rank+1, 0, MPI_COMM_WORLD);
-				MPI_Recv (elementi, elementiXproc, MPI_FLOAT, rank+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-				m = swapMin(mieiElementi,elementi,elementiXproc);
-				mieiElementi = m->mieiElementi;
-				partialToSort += m->hadToSwap;
-			}
 		}
-
-		MPI_Reduce(&partialToSort, &toSort, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-		MPI_Bcast(&toSort, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	}
 
 	MPI_Gather(mieiElementi, elementiXproc, MPI_FLOAT, result, elementiXproc, MPI_FLOAT, 0, MPI_COMM_WORLD);
@@ -171,7 +245,7 @@ int main(int argc, char* argv[]){
 		free(result);
 	}
 
-	free(m);
+	free(binary);
 	free(mieiElementi);
 	free(elementi);
 
