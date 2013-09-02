@@ -3,7 +3,8 @@
 
 #define INDEX(i,j,rowlen) ((i)*(rowlen)+j)
 
-int main2(int argc, char* argv[]) {
+/* Versione non linearizzata */
+int main(int argc, char* argv[]) {
 	float **A;
 	float *x;
 	float n, temp, res, test;
@@ -57,7 +58,8 @@ int main2(int argc, char* argv[]) {
 	return 0;
 }
 
-int main1(int argc, char** argv) {
+/* Versione linearizzata */
+int main(int argc, char** argv) {
 	float *A;
 	float *x;
 	float n, temp, res;
