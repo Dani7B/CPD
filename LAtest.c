@@ -5,7 +5,7 @@
 
 #define INDEX(i,j,rowlen) ((i)*(rowlen)+j)
 
-int main7(int argc, char** argv) {
+int main(int argc, char** argv) {
 	float *A, *B, *scattered; // Assumo che B sia la matrice pi� grande e sia l'ultima letta dal file
 	float *result, *global, finale;
 	int rank, size, chunk, i, j;
